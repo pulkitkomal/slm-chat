@@ -24,6 +24,8 @@ def _is_valid_entity(name: str) -> bool:
         return True
     if len(words) >= 3 and re.search(r"\b(is|are|was|were|have|has|had)\b", name):
         return False
+    if name.lower() in ("object", "subject", "relation", "person", "thing"):
+        return False
     return True
 
 
@@ -101,6 +103,7 @@ class GraphMemory:
             if node_tokens and all_tokens & node_tokens:
                 matched_entities.add(node)
 
+        fallback = not matched_entities
         if not matched_entities:
             node_counts = [(n, g.nodes[n].get("count", 0)) for n in g.nodes if _is_valid_entity(n)]
             node_counts.sort(key=lambda x: -x[1])
@@ -122,6 +125,24 @@ class GraphMemory:
                 weight = edge_data.get("weight", 1)
                 count = g.nodes[neighbor].get("count", 0)
                 scored.append((weight + count * 0.5, entity, edge_data["relation"], neighbor))
+
+        if not scored and not fallback:
+            node_counts = [(n, g.nodes[n].get("count", 0)) for n in g.nodes if _is_valid_entity(n)]
+            node_counts.sort(key=lambda x: -x[1])
+            for entity, _ in node_counts[:3]:
+                for neighbor in list(g.successors(entity)) + list(g.predecessors(entity)):
+                    if not _is_valid_entity(neighbor):
+                        continue
+                    edge_data = g.get_edge_data(entity, neighbor) or g.get_edge_data(neighbor, entity)
+                    if not edge_data:
+                        continue
+                    pair = tuple(sorted([entity, neighbor]))
+                    if pair in seen:
+                        continue
+                    seen.add(pair)
+                    weight = edge_data.get("weight", 1)
+                    count = g.nodes[neighbor].get("count", 0)
+                    scored.append((weight + count * 0.5, entity, edge_data["relation"], neighbor))
 
         scored.sort(key=lambda x: -x[0])
         lines = [f"{e} --({r})--> {n}" for _, e, r, n in scored[:max_results]]

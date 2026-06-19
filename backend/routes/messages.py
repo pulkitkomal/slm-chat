@@ -29,7 +29,7 @@ async def send_message(chat_id: str, body: CreateMessage):
     db.add_message(chat_id, "user", body.content)
 
     graph_memory.load_graph(chat_id)
-    recent = db.get_messages(chat_id, limit=6)
+    recent = db.get_messages(chat_id, limit=10)
     messages_for_llm = [{"role": m.role, "content": m.content} for m in recent]
 
     graph_ctx = graph_memory.query_context(chat_id, [body.content])
@@ -59,9 +59,9 @@ async def stream_messages(chat_id: str, q: str = ""):
         db.add_message(chat_id, "user", q)
 
     graph_memory.load_graph(chat_id)
-    recent = db.get_messages(chat_id, limit=6)
+    recent = db.get_messages(chat_id, limit=10)
     messages_for_llm = [{"role": m.role, "content": m.content} for m in recent]
-    graph_ctx = graph_memory.query_context(chat_id, [m.content for m in recent[-3:]])
+    graph_ctx = graph_memory.query_context(chat_id, [q] + [m.content for m in recent[-3:]])
 
     async def extract_and_update(user_msg: str, ai_response: str):
         try:

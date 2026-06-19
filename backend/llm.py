@@ -23,6 +23,8 @@ def _is_valid_entity(name: str) -> bool:
         return True
     if len(words) >= 3 and re.search(r"\b(is|are|was|were|have|has|had|been)\b", name):
         return False
+    if name.lower() in ("object", "subject", "relation", "person", "thing"):
+        return False
     return True
 
 
@@ -71,7 +73,7 @@ class LLMClient:
         if graph_context:
             ollama_messages.append({
                 "role": "system",
-                "content": f"Here is relevant context from our conversation history:\n{graph_context}",
+                "content": f"You remember these facts about the user from past conversation. Use them to answer accurately:\n{graph_context}",
             })
         for msg in messages:
             ollama_messages.append({"role": msg["role"], "content": msg["content"]})
@@ -85,7 +87,7 @@ class LLMClient:
         if graph_context:
             ollama_messages.append({
                 "role": "system",
-                "content": f"Here is relevant context from our conversation history:\n{graph_context}",
+                "content": f"You remember these facts about the user from past conversation. Use them to answer accurately:\n{graph_context}",
             })
         for msg in messages:
             ollama_messages.append({"role": msg["role"], "content": msg["content"]})
@@ -114,17 +116,16 @@ class LLMClient:
 
     async def extract_entities(self, user_message: str, ai_response: str) -> list[tuple[str, str, str]]:
         prompt = (
-            "Extract facts from this conversation as simple triples.\n"
-            "Format: subject | relation | object\n"
-            "Examples:\n"
+            "Extract facts from this conversation as triples.\n"
+            "Each line: subject | relation | object\n"
+            "Only use exact words from the conversation.\n"
+            "Example:\n"
             "user | likes | fantasy books\n"
-            "user | enjoys | cooking\n"
-            "assistant | suggests | hiking trails\n\n"
             f"User: {user_message}\n"
             f"Assistant: {ai_response}"
         )
         result = await self._ollama_chat([
-            {"role": "system", "content": "Extract knowledge triples. Format each as: subject | relation | object"},
+            {"role": "system", "content": "Extract triples from the conversation. Format: subject | relation | object"},
             {"role": "user", "content": prompt},
         ], stream=False)
         text = result.get("message", {}).get("content", "")

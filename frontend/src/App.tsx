@@ -24,7 +24,10 @@ export default function App() {
 
   const handleCreate = async (agentId?: string) => {
     const chat = await createChat(undefined, agentId);
-    if (chat && isMobile) setShowList(false);
+    if (chat) {
+      await selectChat(chat.id);
+      if (isMobile) setShowList(false);
+    }
   };
 
   const handleBack = () => setShowList(true);

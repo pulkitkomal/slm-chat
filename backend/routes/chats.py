@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
+from agents import get_agent
 from db import db
 from graph_memory import graph_memory
 from models import Chat, ChatListResponse, CreateChat, UpdateChat
@@ -15,7 +16,15 @@ async def list_chats():
 
 @router.post("", response_model=Chat, status_code=201)
 async def create_chat(body: CreateChat):
-    chat = db.create_chat(title=body.title, system_message=body.system_message)
+    title = body.title
+    system_message = body.system_message
+    agent_id = body.agent_id
+    if agent_id:
+        agent = get_agent(agent_id)
+        if agent:
+            title = agent.name
+            system_message = agent.system_message
+    chat = db.create_chat(title=title, system_message=system_message, agent_id=agent_id)
     graph_memory.create_graph(chat.id)
     return chat
 

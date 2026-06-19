@@ -1,7 +1,16 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+export interface Agent {
+  id: string;
+  name: string;
+  avatar: string;
+  title: string;
+  system_message: string;
+}
 
 export interface Chat {
   id: string;
+  agent_id: string | null;
   title: string;
   system_message: string;
   created_at: string;
@@ -31,9 +40,14 @@ async function request<T>(path: string, opts?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  listAgents: () => request<{ agents: Agent[] }>("/api/agents"),
+  createAgent: (data: { name: string; avatar?: string; title?: string; system_message?: string }) =>
+    request<Agent>("/api/agents", { method: "POST", body: JSON.stringify(data) }),
+  deleteAgent: (id: string) =>
+    request<{ message: string }>(`/api/agents/${id}`, { method: "DELETE" }),
   listChats: () => request<{ chats: Chat[] }>("/api/chats"),
-  createChat: (title: string, system_message = "") =>
-    request<Chat>("/api/chats", { method: "POST", body: JSON.stringify({ title, system_message }) }),
+  createChat: (title: string, system_message = "", agent_id?: string) =>
+    request<Chat>("/api/chats", { method: "POST", body: JSON.stringify({ title, system_message, agent_id }) }),
   getChat: (id: string) => request<Chat>(`/api/chats/${id}`),
   updateChat: (id: string, data: Partial<Chat>) =>
     request<Chat>(`/api/chats/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

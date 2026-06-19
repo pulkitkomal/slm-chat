@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -6,6 +7,28 @@ import networkx as nx
 
 from config import config
 from models import GraphData, GraphEdge, GraphNode
+
+_MAX_ENTITY_LENGTH = 40
+
+
+def _is_valid_entity(name: str) -> bool:
+    name = name.strip()
+    if not name:
+        return False
+    if len(name) > _MAX_ENTITY_LENGTH:
+        return False
+    words = name.split()
+    if len(words) > 5:
+        return False
+    if name.lower() in ("user", "assistant", "system"):
+        return True
+    if len(words) >= 3 and re.search(r"\b(is|are|was|were|have|has|had)\b", name):
+        return False
+    return True
+
+
+def _normalize(name: str) -> str:
+    return name.strip().lower()
 
 
 class GraphMemory:
@@ -39,39 +62,70 @@ class GraphMemory:
         self._graph_path(chat_id).write_text(json.dumps(data, indent=2))
 
     def add_triple(self, chat_id: str, subject: str, relation: str, obj: str, properties: Optional[dict] = None):
+        subj = _normalize(subject)
+        obj = _normalize(obj)
+        if not _is_valid_entity(subj) or not _is_valid_entity(obj):
+            return
         g = self.load_graph(chat_id)
-        if subject not in g:
-            g.add_node(subject, label=subject, node_type="entity", count=0)
+        if subj not in g:
+            g.add_node(subj, label=subj, node_type="entity", count=0)
         if obj not in g:
             g.add_node(obj, label=obj, node_type="entity", count=0)
-        if g.has_edge(subject, obj):
-            g[subject][obj]["weight"] = g[subject][obj].get("weight", 1) + 1
-            g[subject][obj]["relation"] = relation
-            g[subject][obj]["count"] = g[subject][obj].get("count", 1) + 1
+        if g.has_edge(subj, obj):
+            g[subj][obj]["weight"] = g[subj][obj].get("weight", 1) + 1
+            g[subj][obj]["relation"] = relation
         else:
-            g.add_edge(subject, obj, relation=relation, weight=1.0, count=1)
-        g.nodes[subject]["count"] = g.nodes[subject].get("count", 0) + 1
+            g.add_edge(subj, obj, relation=relation, weight=1.0)
+        g.nodes[subj]["count"] = g.nodes[subj].get("count", 0) + 1
         g.nodes[obj]["count"] = g.nodes[obj].get("count", 0) + 1
-        if properties:
-            g.nodes[subject].update(properties)
-            g.nodes[obj].update(properties)
         self._save_graph(chat_id, g)
 
-    def query_context(self, chat_id: str, entities: list[str], max_results: int = 10) -> str:
+    def _tokenize(self, text: str) -> set[str]:
+        words = re.findall(r"[a-zA-Z]+", text.lower())
+        return {w for w in words if len(w) > 2}
+
+    def query_context(self, chat_id: str, texts: list[str], max_results: int = 8) -> str:
         g = self.load_graph(chat_id)
-        context_parts = []
-        seen = set()
-        for entity in entities:
-            if entity not in g:
+        if g.number_of_nodes() == 0:
+            return ""
+
+        all_tokens = set()
+        for t in texts:
+            all_tokens.update(self._tokenize(t))
+
+        matched_entities = set()
+        for node in g.nodes:
+            if not _is_valid_entity(node):
                 continue
-            neighbors = list(g.successors(entity)) + list(g.predecessors(entity))
-            for neighbor in neighbors[:max_results]:
+            node_tokens = self._tokenize(node)
+            if node_tokens and all_tokens & node_tokens:
+                matched_entities.add(node)
+
+        if not matched_entities:
+            node_counts = [(n, g.nodes[n].get("count", 0)) for n in g.nodes if _is_valid_entity(n)]
+            node_counts.sort(key=lambda x: -x[1])
+            matched_entities = {n for n, _ in node_counts[:3]}
+
+        scored = []
+        seen = set()
+        for entity in matched_entities:
+            for neighbor in list(g.successors(entity)) + list(g.predecessors(entity)):
+                if not _is_valid_entity(neighbor):
+                    continue
                 edge_data = g.get_edge_data(entity, neighbor) or g.get_edge_data(neighbor, entity)
-                if edge_data and (entity, neighbor) not in seen:
-                    seen.add((entity, neighbor))
-                    rel = edge_data.get("relation", "related_to")
-                    context_parts.append(f"{entity} --({rel})--> {neighbor}")
-        return "\n".join(context_parts[:max_results])
+                if not edge_data:
+                    continue
+                pair = tuple(sorted([entity, neighbor]))
+                if pair in seen:
+                    continue
+                seen.add(pair)
+                weight = edge_data.get("weight", 1)
+                count = g.nodes[neighbor].get("count", 0)
+                scored.append((weight + count * 0.5, entity, edge_data["relation"], neighbor))
+
+        scored.sort(key=lambda x: -x[0])
+        lines = [f"{e} --({r})--> {n}" for _, e, r, n in scored[:max_results]]
+        return "\n".join(lines)
 
     def delete_graph(self, chat_id: str) -> bool:
         self._graphs.pop(chat_id, None)

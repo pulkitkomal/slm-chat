@@ -7,6 +7,29 @@ import httpx
 from config import config
 
 
+_MAX_ENTITY_LENGTH = 40
+
+
+def _is_valid_entity(name: str) -> bool:
+    name = name.strip()
+    if not name:
+        return False
+    if len(name) > _MAX_ENTITY_LENGTH:
+        return False
+    words = name.split()
+    if len(words) > 5:
+        return False
+    if name.lower() in ("user", "assistant", "system"):
+        return True
+    if len(words) >= 3 and re.search(r"\b(is|are|was|were|have|has|had|been)\b", name):
+        return False
+    return True
+
+
+def _normalize(name: str) -> str:
+    return name.strip().lower()
+
+
 class LLMClient:
     def __init__(self, base_url: str = config.ollama_base_url, model: str = config.model_name):
         self.base_url = base_url.rstrip("/")
@@ -66,33 +89,63 @@ class LLMClient:
             })
         for msg in messages:
             ollama_messages.append({"role": msg["role"], "content": msg["content"]})
-        async for token in await self._stream_response(self.base_url + "/api/chat", {
+        async for token in self._stream_response(self.base_url + "/api/chat", {
             "model": self.model,
             "messages": ollama_messages,
             "stream": True,
         }):
             yield token
 
+    def _parse_triples(self, text: str) -> list[tuple[str, str, str]]:
+        """Parse triples from LLM output. Handles pipe-separated and space-separated formats."""
+        raw = []
+        for line in text.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            parts = [p.strip() for p in re.split(r"\s*\|\s*", line)]
+            if len(parts) == 3:
+                raw.append(tuple(parts))
+                continue
+            parts = line.split()
+            if len(parts) == 3:
+                raw.append(tuple(parts))
+        return raw
+
     async def extract_entities(self, user_message: str, ai_response: str) -> list[tuple[str, str, str]]:
         prompt = (
-            "Extract facts from this conversation as (subject, relation, object) triples.\n"
-            "Format each triple on one line like: user | likes | pizza\n"
-            "Only output the triples, nothing else.\n\n"
+            "Extract facts from this conversation as simple triples.\n"
+            "Format: subject | relation | object\n"
+            "Examples:\n"
+            "user | likes | fantasy books\n"
+            "user | enjoys | cooking\n"
+            "assistant | suggests | hiking trails\n\n"
             f"User: {user_message}\n"
             f"Assistant: {ai_response}"
         )
         result = await self._ollama_chat([
-            {"role": "system", "content": "You extract knowledge triples from conversations. Output only triples, one per line."},
+            {"role": "system", "content": "Extract knowledge triples. Format each as: subject | relation | object"},
             {"role": "user", "content": prompt},
         ], stream=False)
         text = result.get("message", {}).get("content", "")
-        triples = []
-        for line in text.strip().split("\n"):
-            line = line.strip()
-            parts = [p.strip() for p in re.split(r"\s*\|\s*", line)]
-            if len(parts) == 3:
-                triples.append((parts[0], parts[1], parts[2]))
-        return triples
+        raw = self._parse_triples(text)
+
+        seen = set()
+        clean = []
+        for subj, rel, obj in raw:
+            subj_n = _normalize(subj)
+            obj_n = _normalize(obj)
+            rel_l = rel.strip().lower()
+            if not _is_valid_entity(subj_n) or not _is_valid_entity(obj_n):
+                continue
+            if subj_n == obj_n:
+                continue
+            key = (subj_n, rel_l, obj_n)
+            if key in seen:
+                continue
+            seen.add(key)
+            clean.append((subj_n, rel_l, obj_n))
+        return clean
 
 
 llm_client = LLMClient()

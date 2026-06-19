@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from config import config
-from models import Chat, Message
+from models import Agent, Chat, Message
 
 
 class Database:
@@ -28,11 +28,30 @@ class Database:
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
+    def _row_to_agent(self, row: sqlite3.Row) -> Agent:
+        return Agent(
+            id=row["id"],
+            name=row["name"],
+            avatar=row["avatar"],
+            title=row["title"],
+            system_message=row["system_message"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
     def init_db(self):
         conn = self._connect()
         conn.executescript("""
+            CREATE TABLE IF NOT EXISTS agents (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                avatar TEXT NOT NULL DEFAULT '🤖',
+                title TEXT NOT NULL DEFAULT '',
+                system_message TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS chats (
                 id TEXT PRIMARY KEY,
+                agent_id TEXT,
                 title TEXT NOT NULL,
                 system_message TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
@@ -48,13 +67,67 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
         """)
+        try:
+            conn.execute("ALTER TABLE chats ADD COLUMN agent_id TEXT")
+        except Exception:
+            pass
+        now = datetime.now(timezone.utc).isoformat()
+        defaults = [
+            ("mentor", "Marcus", "🧙‍♂️", "Wise Mentor",
+             "You are Marcus, a wise and experienced mentor. You speak with calm authority and ancient wisdom. You guide the user through challenges with parables and thoughtful advice. You are patient, kind, but honest. Your responses are measured and profound."),
+            ("friend", "Sophie", "👩‍🦰", "Supportive Friend",
+             "You are Sophie, a warm and supportive friend. You are caring, empathetic, and always there to listen. You use casual, friendly language and sometimes humor. You are the kind of friend who knows when to offer advice and when to just be present. You care deeply about the user wellbeing."),
+        ]
+        for aid, name, avatar, title, sysmsg in defaults:
+            conn.execute(
+                "INSERT OR REPLACE INTO agents (id, name, avatar, title, system_message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (aid, name, avatar, title, sysmsg, now),
+            )
         conn.commit()
         if conn is not self._mem_conn:
             conn.close()
 
+    def list_agents(self) -> list[Agent]:
+        conn = self._connect()
+        rows = conn.execute("SELECT * FROM agents ORDER BY created_at ASC").fetchall()
+        if conn is not self._mem_conn:
+            conn.close()
+        return [self._row_to_agent(r) for r in rows]
+
+    def get_agent(self, agent_id: str) -> Agent | None:
+        conn = self._connect()
+        row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        if conn is not self._mem_conn:
+            conn.close()
+        return self._row_to_agent(row) if row else None
+
+    def create_agent(self, name: str, avatar: str, title: str, system_message: str) -> Agent:
+        conn = self._connect()
+        agent_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "INSERT INTO agents (id, name, avatar, title, system_message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (agent_id, name, avatar, title, system_message, now),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        if conn is not self._mem_conn:
+            conn.close()
+        return self._row_to_agent(row)
+
+    def delete_agent(self, agent_id: str) -> bool:
+        conn = self._connect()
+        cursor = conn.execute("DELETE FROM agents WHERE id = ?", (agent_id,))
+        conn.commit()
+        affected = cursor.rowcount
+        if conn is not self._mem_conn:
+            conn.close()
+        return affected > 0
+
     def _row_to_chat(self, row: sqlite3.Row) -> Chat:
         return Chat(
             id=row["id"],
+            agent_id=row["agent_id"],
             title=row["title"],
             system_message=row["system_message"],
             created_at=datetime.fromisoformat(row["created_at"]),
@@ -70,13 +143,13 @@ class Database:
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
-    def create_chat(self, title: str, system_message: str = "") -> Chat:
+    def create_chat(self, title: str, system_message: str = "", agent_id: str | None = None) -> Chat:
         conn = self._connect()
         chat_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         conn.execute(
-            "INSERT INTO chats (id, title, system_message, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-            (chat_id, title, system_message, now, now),
+            "INSERT INTO chats (id, agent_id, title, system_message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (chat_id, agent_id, title, system_message, now, now),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM chats WHERE id = ?", (chat_id,)).fetchone()
@@ -157,9 +230,10 @@ class Database:
     def get_messages(self, chat_id: str, limit: int = 100, offset: int = 0) -> list[Message]:
         conn = self._connect()
         rows = conn.execute(
-            "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC LIMIT ? OFFSET ?",
-            (chat_id, limit, offset),
+            "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?",
+            (chat_id, limit),
         ).fetchall()
+        rows.reverse()
         if conn is not self._mem_conn:
             conn.close()
         return [self._row_to_message(r) for r in rows]

@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Chat, Message } from "../api/client";
+import type { Agent } from "../api/client";
 
 export function useChat() {
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -10,6 +12,17 @@ export function useChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeChat = chats.find((c) => c.id === activeChatId) || null;
+  const activeAgent = agents.find((a) => a.id === activeChat?.agent_id) || null;
+
+  const loadAgents = useCallback(async () => {
+    try {
+      setError(null);
+      const data = await api.listAgents();
+      setAgents(data.agents);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
+    }
+  }, []);
 
   const loadChats = useCallback(async () => {
     try {
@@ -22,8 +35,9 @@ export function useChat() {
   }, []);
 
   useEffect(() => {
+    loadAgents();
     loadChats();
-  }, [loadChats]);
+  }, [loadAgents, loadChats]);
 
   const selectChat = useCallback(async (id: string) => {
     try {
@@ -37,10 +51,32 @@ export function useChat() {
     }
   }, []);
 
-  const createChat = useCallback(async (title?: string) => {
+  const createAgent = useCallback(async (data: { name: string; avatar?: string; title?: string; system_message?: string }) => {
     try {
       setError(null);
-      const chat = await api.createChat(title || "New Chat");
+      const agent = await api.createAgent(data);
+      setAgents((prev) => [...prev, agent]);
+      return agent;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
+      throw e;
+    }
+  }, []);
+
+  const deleteAgent = useCallback(async (id: string) => {
+    try {
+      setError(null);
+      await api.deleteAgent(id);
+      setAgents((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
+    }
+  }, []);
+
+  const createChat = useCallback(async (title?: string, agent_id?: string) => {
+    try {
+      setError(null);
+      const chat = await api.createChat(title || "New Chat", "", agent_id);
       setChats((prev) => [chat, ...prev]);
       return chat;
     } catch (e) {
@@ -156,9 +192,11 @@ export function useChat() {
   }, [activeChatId]);
 
   return {
+    agents,
     chats,
     activeChatId,
     activeChat,
+    activeAgent,
     messages,
     streamingContent,
     loading,
@@ -167,6 +205,8 @@ export function useChat() {
     createChat,
     updateChat,
     deleteChat,
+    createAgent,
+    deleteAgent,
     resetChat,
     sendMessage,
   };

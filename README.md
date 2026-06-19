@@ -8,7 +8,9 @@ A personal AI friend chat application powered by `floxy/LFM2.5-Instruct:1.2b` vi
 docker compose up -d
 ```
 
-Open http://localhost in your browser.
+Open http://localhost:8081 in your browser.
+
+Backend API at http://localhost:8002. Ollama at http://localhost:11434.
 
 ## Development
 

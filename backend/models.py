@@ -5,6 +5,7 @@ from typing import Optional
 
 class Chat(BaseModel):
     id: str
+    agent_id: str | None = None
     title: str
     system_message: str = ""
     created_at: datetime
@@ -19,9 +20,26 @@ class Message(BaseModel):
     created_at: datetime
 
 
+class Agent(BaseModel):
+    id: str
+    name: str
+    avatar: str
+    title: str
+    system_message: str
+    created_at: datetime
+
+
+class CreateAgent(BaseModel):
+    name: str
+    avatar: str = "🤖"
+    title: str = ""
+    system_message: str = ""
+
+
 class CreateChat(BaseModel):
     title: str = "New Chat"
     system_message: str = ""
+    agent_id: str | None = None
 
 
 class UpdateChat(BaseModel):

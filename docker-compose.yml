@@ -5,18 +5,11 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "8002:8000"
     volumes:
       - slm_data:/app/data
     environment:
@@ -27,7 +20,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "80:80"
+      - "8081:80"
     depends_on:
       - backend
 

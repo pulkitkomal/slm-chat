@@ -8,11 +8,17 @@ export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const activeChat = chats.find((c) => c.id === activeChatId) || null;
 
   const loadChats = useCallback(async () => {
-    const data = await api.listChats();
-    setChats(data.chats);
+    try {
+      setError(null);
+      const data = await api.listChats();
+      setChats(data.chats);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
+    }
   }, []);
 
   useEffect(() => {
@@ -20,40 +26,67 @@ export function useChat() {
   }, [loadChats]);
 
   const selectChat = useCallback(async (id: string) => {
-    setActiveChatId(id);
-    setStreamingContent("");
-    const data = await api.listMessages(id);
-    setMessages(data.messages);
+    try {
+      setError(null);
+      setActiveChatId(id);
+      setStreamingContent("");
+      const data = await api.listMessages(id);
+      setMessages(data.messages);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
+    }
   }, []);
 
   const createChat = useCallback(async (title?: string) => {
-    const chat = await api.createChat(title || "New Chat");
-    setChats((prev) => [chat, ...prev]);
-    return chat;
+    try {
+      setError(null);
+      const chat = await api.createChat(title || "New Chat");
+      setChats((prev) => [chat, ...prev]);
+      return chat;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
+      throw e;
+    }
   }, []);
 
   const updateChat = useCallback(async (id: string, data: Partial<Chat>) => {
-    const updated = await api.updateChat(id, data);
-    setChats((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    try {
+      setError(null);
+      const updated = await api.updateChat(id, data);
+      setChats((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
+    }
   }, []);
 
   const deleteChat = useCallback(async (id: string) => {
-    await api.deleteChat(id);
-    setChats((prev) => prev.filter((c) => c.id !== id));
-    if (activeChatId === id) {
-      setActiveChatId(null);
-      setMessages([]);
+    try {
+      setError(null);
+      await api.deleteChat(id);
+      setChats((prev) => prev.filter((c) => c.id !== id));
+      if (activeChatId === id) {
+        setActiveChatId(null);
+        setMessages([]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
     }
   }, [activeChatId]);
 
   const resetChat = useCallback(async (id: string) => {
-    await api.resetChat(id);
-    setMessages([]);
-    setStreamingContent("");
+    try {
+      setError(null);
+      await api.resetChat(id);
+      setMessages([]);
+      setStreamingContent("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
+    }
   }, []);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!activeChatId) return;
+    setError(null);
     setLoading(true);
     setStreamingContent("");
 
@@ -66,52 +99,58 @@ export function useChat() {
     };
     setMessages((prev) => [...prev, userMsg]);
 
-    const streamUrl = api.streamUrl(activeChatId);
-    const res = await fetch(streamUrl, {
-      method: "GET",
-      headers: { Accept: "text/event-stream" },
-    });
+    try {
+      const streamUrl = `${api.streamUrl(activeChatId)}?q=${encodeURIComponent(content)}`;
+      const res = await fetch(streamUrl, {
+        method: "GET",
+        headers: { Accept: "text/event-stream" },
+      });
 
-    if (!res.ok) {
-      setLoading(false);
-      return;
-    }
+      if (!res.ok) {
+        setError(`HTTP ${res.status}: ${await res.text()}`);
+        setLoading(false);
+        return;
+      }
 
-    const reader = res.body?.getReader();
-    if (!reader) {
-      setLoading(false);
-      return;
-    }
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setError("Stream not available");
+        setLoading(false);
+        return;
+      }
 
-    const decoder = new TextDecoder();
-    let full = "";
+      const decoder = new TextDecoder();
+      let full = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value);
-      const lines = chunk.split("\n");
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const data = line.slice(6);
-          if (data === "[DONE]") {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: "streamed",
-                chat_id: activeChatId,
-                role: "assistant",
-                content: full,
-                created_at: new Date().toISOString(),
-              },
-            ]);
-            setStreamingContent("");
-          } else {
-            full += data;
-            setStreamingContent(full);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: "streamed",
+                  chat_id: activeChatId,
+                  role: "assistant",
+                  content: full,
+                  created_at: new Date().toISOString(),
+                },
+              ]);
+              setStreamingContent("");
+            } else {
+              full += data;
+              setStreamingContent(full);
+            }
           }
         }
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "An error occurred");
     }
     setLoading(false);
   }, [activeChatId]);
@@ -123,6 +162,7 @@ export function useChat() {
     messages,
     streamingContent,
     loading,
+    error,
     selectChat,
     createChat,
     updateChat,

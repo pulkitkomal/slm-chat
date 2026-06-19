@@ -8,12 +8,13 @@ interface Props {
   messages: Message[];
   streamingContent: string;
   loading: boolean;
+  error: string | null;
   onSend: (content: string) => void;
   onUpdateChat: (id: string, data: Partial<Chat>) => void;
   onReset: (id: string) => void;
 }
 
-export function ChatWindow({ chat, messages, streamingContent, loading, onSend, onUpdateChat, onReset }: Props) {
+export function ChatWindow({ chat, messages, streamingContent, loading, error, onSend, onUpdateChat, onReset }: Props) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh" }}>
       <div style={{ padding: "12px 16px", borderBottom: "1px solid #333", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#1a1a1a" }}>
@@ -43,6 +44,11 @@ export function ChatWindow({ chat, messages, streamingContent, loading, onSend, 
           </div>
         )}
       </div>
+      {error && (
+        <div style={{ padding: "8px 16px", background: "#5c1a1a", color: "#ff8a8a", fontSize: 13, textAlign: "center", borderTop: "1px solid #7a2a2a" }}>
+          {error}
+        </div>
+      )}
       <MessageInput onSend={onSend} disabled={loading} />
     </div>
   );

@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -48,15 +50,26 @@ async def send_message(chat_id: str, body: CreateMessage):
 
 
 @router.get("/stream")
-async def stream_messages(chat_id: str):
+async def stream_messages(chat_id: str, q: str = ""):
     chat = db.get_chat(chat_id)
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
+
+    if q:
+        db.add_message(chat_id, "user", q)
 
     graph_memory.load_graph(chat_id)
     recent = db.get_messages(chat_id, limit=20)
     messages_for_llm = [{"role": m.role, "content": m.content} for m in recent]
     graph_ctx = graph_memory.query_context(chat_id, [m.content for m in recent[-3:]])
+
+    async def extract_and_update(user_msg: str, ai_response: str):
+        try:
+            triples = await llm_client.extract_entities(user_msg, ai_response)
+            for subj, rel, obj in triples:
+                graph_memory.add_triple(chat_id, subj, rel, obj)
+        except Exception:
+            pass
 
     async def generate():
         full_response = ""
@@ -70,11 +83,7 @@ async def stream_messages(chat_id: str):
 
         db.add_message(chat_id, "assistant", full_response)
 
-        if recent:
-            user_content = recent[-1].content
-            triples = await llm_client.extract_entities(user_content, full_response)
-            for subj, rel, obj in triples:
-                graph_memory.add_triple(chat_id, subj, rel, obj)
+        asyncio.create_task(extract_and_update(q, full_response))
 
         yield "data: [DONE]\n\n"
 

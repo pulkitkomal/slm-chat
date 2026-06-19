@@ -11,6 +11,7 @@ class LLMClient:
     def __init__(self, base_url: str = config.ollama_base_url, model: str = config.model_name):
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self._client = httpx.AsyncClient(timeout=120.0)
 
     async def _ollama_chat(self, messages: list[dict], stream: bool = False):
         url = f"{self.base_url}/api/chat"
@@ -21,26 +22,24 @@ class LLMClient:
         }
         if stream:
             return self._stream_response(url, payload)
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(url, json=payload)
-            resp.raise_for_status()
-            return resp.json()
+        resp = await self._client.post(url, json=payload)
+        resp.raise_for_status()
+        return resp.json()
 
     async def _stream_response(self, url: str, payload: dict) -> AsyncGenerator[str, None]:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream("POST", url, json=payload) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if line.strip():
-                        try:
-                            data = json.loads(line)
-                            token = data.get("message", {}).get("content", "")
-                            if token:
-                                yield token
-                            if data.get("done"):
-                                return
-                        except json.JSONDecodeError:
-                            continue
+        async with self._client.stream("POST", url, json=payload) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        token = data.get("message", {}).get("content", "")
+                        if token:
+                            yield token
+                        if data.get("done"):
+                            return
+                    except json.JSONDecodeError:
+                        continue
 
     async def generate(self, system_message: str, messages: list[dict], graph_context: str = "") -> str:
         ollama_messages = []

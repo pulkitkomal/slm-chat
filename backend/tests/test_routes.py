@@ -1,17 +1,16 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 
-from db import db
-
-db.db_path = ":memory:"
-db._mem_conn = None
-db.init_db()
-
 from main import app
 
 
 @pytest.fixture
 def client():
+    from db import db
+
+    db.db_path = ":memory:"
+    db._mem_conn = None
+    db.init_db()
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 

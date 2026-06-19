@@ -4,7 +4,7 @@ import { useChat } from "./hooks/useChat";
 
 export default function App() {
   const {
-    chats, activeChatId, activeChat, messages, streamingContent, loading,
+    chats, activeChatId, activeChat, messages, streamingContent, loading, error,
     selectChat, createChat, updateChat, deleteChat, resetChat, sendMessage,
   } = useChat();
 
@@ -23,6 +23,7 @@ export default function App() {
           messages={messages}
           streamingContent={streamingContent}
           loading={loading}
+          error={error}
           onSend={sendMessage}
           onUpdateChat={updateChat}
           onReset={resetChat}

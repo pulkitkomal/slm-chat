@@ -11,11 +11,15 @@ export default function App() {
   } = useChat();
 
   const isMobile = useIsMobile();
+  const [ready, setReady] = useState(false);
   const [showList, setShowList] = useState(true);
 
   useEffect(() => {
-    if (!isMobile) setShowList(false);
+    setShowList(isMobile);
+    setReady(true);
   }, [isMobile]);
+
+  if (!ready) return null;
 
   const handleSelect = async (id: string) => {
     await selectChat(id);

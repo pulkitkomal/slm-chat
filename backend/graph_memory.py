@@ -94,9 +94,9 @@ class GraphMemory:
         if emotion not in g:
             g.add_node(emotion, label=emotion, node_type="emotion", count=0)
         if g.has_edge("user", emotion):
-            g["user"]["emotion"]["weight"] += 1
-            g["user"]["emotion"]["intensity"] = (g["user"]["emotion"].get("intensity", intensity) + intensity) / 2
-            g["user"]["emotion"]["timestamp"] = ts
+            g["user"][emotion]["weight"] += 1
+            g["user"][emotion]["intensity"] = (g["user"][emotion].get("intensity", intensity) + intensity) / 2
+            g["user"][emotion]["timestamp"] = ts
         else:
             g.add_edge("user", emotion, relation="feels", weight=1.0, intensity=intensity, timestamp=ts)
         g.nodes["user"]["count"] = g.nodes["user"].get("count", 0) + 1

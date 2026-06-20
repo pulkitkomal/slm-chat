@@ -29,15 +29,27 @@ async def send_message(chat_id: str, body: CreateMessage):
     db.add_message(chat_id, "user", body.content)
 
     graph_memory.load_graph(chat_id)
+
+    emotion, intensity = await llm_client.classify_emotion(body.content)
+    graph_memory.add_emotion(chat_id, emotion, intensity)
+    emotion_ctx = graph_memory.get_emotion_context(chat_id)
+
     recent = db.get_messages(chat_id, limit=10)
     messages_for_llm = [{"role": m.role, "content": m.content} for m in recent]
 
     graph_ctx = graph_memory.query_context(chat_id, [body.content])
 
+    context_parts = []
+    if graph_ctx:
+        context_parts.append(f"Facts you know:\n{graph_ctx}")
+    if emotion_ctx:
+        context_parts.append(emotion_ctx)
+    full_context = "\n\n".join(context_parts)
+
     response = await llm_client.generate(
         system_message=chat.system_message,
         messages=messages_for_llm,
-        graph_context=graph_ctx,
+        graph_context=full_context,
     )
 
     assistant_msg = db.add_message(chat_id, "assistant", response)
@@ -59,9 +71,21 @@ async def stream_messages(chat_id: str, q: str = ""):
         db.add_message(chat_id, "user", q)
 
     graph_memory.load_graph(chat_id)
+
+    emotion, intensity = await llm_client.classify_emotion(q)
+    graph_memory.add_emotion(chat_id, emotion, intensity)
+    emotion_ctx = graph_memory.get_emotion_context(chat_id)
+
     recent = db.get_messages(chat_id, limit=10)
     messages_for_llm = [{"role": m.role, "content": m.content} for m in recent]
     graph_ctx = graph_memory.query_context(chat_id, [q] + [m.content for m in recent[-3:]])
+
+    context_parts = []
+    if graph_ctx:
+        context_parts.append(f"Facts you know:\n{graph_ctx}")
+    if emotion_ctx:
+        context_parts.append(emotion_ctx)
+    full_context = "\n\n".join(context_parts)
 
     async def extract_and_update(user_msg: str, ai_response: str):
         try:
@@ -72,11 +96,12 @@ async def stream_messages(chat_id: str, q: str = ""):
             pass
 
     async def generate():
+        nonlocal full_context
         full_response = ""
         async for token in llm_client.stream_generate(
             system_message=chat.system_message,
             messages=messages_for_llm,
-            graph_context=graph_ctx,
+            graph_context=full_context,
         ):
             full_response += token
             yield f"data: {token}\n\n"
@@ -88,3 +113,12 @@ async def stream_messages(chat_id: str, q: str = ""):
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.get("/emotion")
+async def get_chat_emotion(chat_id: str):
+    chat = db.get_chat(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    emotion = graph_memory.get_current_emotion(chat_id)
+    return emotion or {"emotion": "calm", "intensity": 0.5}

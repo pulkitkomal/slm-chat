@@ -11,6 +11,7 @@ export function useChat() {
   const [streamingContent, setStreamingContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentEmotion, setCurrentEmotion] = useState<{ emotion: string; intensity: number } | null>(null);
   const activeChat = chats.find((c) => c.id === activeChatId) || null;
   const activeAgent = agents.find((a) => a.id === activeChat?.agent_id) || null;
 
@@ -39,6 +40,15 @@ export function useChat() {
     loadChats();
   }, [loadAgents, loadChats]);
 
+  const loadEmotion = useCallback(async (id: string) => {
+    try {
+      const data = await api.getEmotion(id);
+      setCurrentEmotion(data);
+    } catch {
+      setCurrentEmotion(null);
+    }
+  }, []);
+
   const selectChat = useCallback(async (id: string) => {
     try {
       setError(null);
@@ -46,10 +56,11 @@ export function useChat() {
       setStreamingContent("");
       const data = await api.listMessages(id);
       setMessages(data.messages);
+      loadEmotion(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "An error occurred");
     }
-  }, []);
+  }, [loadEmotion]);
 
   const createAgent = useCallback(async (data: { name: string; avatar?: string; title?: string; system_message?: string }) => {
     try {
@@ -185,11 +196,12 @@ export function useChat() {
           }
         }
       }
+      if (activeChatId) loadEmotion(activeChatId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "An error occurred");
     }
     setLoading(false);
-  }, [activeChatId]);
+  }, [activeChatId, loadEmotion]);
 
   return {
     agents,
@@ -201,6 +213,7 @@ export function useChat() {
     streamingContent,
     loading,
     error,
+    currentEmotion,
     selectChat,
     createChat,
     updateChat,

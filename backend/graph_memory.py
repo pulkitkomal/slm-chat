@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -81,6 +82,50 @@ class GraphMemory:
         g.nodes[subj]["count"] = g.nodes[subj].get("count", 0) + 1
         g.nodes[obj]["count"] = g.nodes[obj].get("count", 0) + 1
         self._save_graph(chat_id, g)
+
+    def add_emotion(self, chat_id: str, emotion: str, intensity: float):
+        g = self.load_graph(chat_id)
+        ts = datetime.now(timezone.utc).isoformat()
+        if "user" not in g:
+            g.add_node("user", label="user", node_type="entity", count=0, emotion_history=[])
+        history = list(g.nodes["user"].get("emotion_history", []))
+        history.append({"emotion": emotion, "intensity": intensity, "timestamp": ts})
+        g.nodes["user"]["emotion_history"] = history[-20:]
+        if emotion not in g:
+            g.add_node(emotion, label=emotion, node_type="emotion", count=0)
+        if g.has_edge("user", emotion):
+            g["user"]["emotion"]["weight"] += 1
+            g["user"]["emotion"]["intensity"] = (g["user"]["emotion"].get("intensity", intensity) + intensity) / 2
+            g["user"]["emotion"]["timestamp"] = ts
+        else:
+            g.add_edge("user", emotion, relation="feels", weight=1.0, intensity=intensity, timestamp=ts)
+        g.nodes["user"]["count"] = g.nodes["user"].get("count", 0) + 1
+        g.nodes[emotion]["count"] = g.nodes[emotion].get("count", 0) + 1
+        self._save_graph(chat_id, g)
+
+    def get_current_emotion(self, chat_id: str) -> Optional[dict]:
+        g = self.load_graph(chat_id)
+        if "user" not in g:
+            return None
+        history = g.nodes["user"].get("emotion_history", [])
+        if not history:
+            return None
+        return dict(history[-1])
+
+    def get_emotion_context(self, chat_id: str) -> str:
+        g = self.load_graph(chat_id)
+        if "user" not in g:
+            return ""
+        history = g.nodes["user"].get("emotion_history", [])
+        if not history:
+            return ""
+        current = history[-1]
+        recent = history[-5:]
+        lines = [f"The user's current emotion seems to be: {current['emotion']} (intensity {current['intensity']:.1f})"]
+        if len(recent) > 1:
+            trend = " → ".join(e["emotion"] for e in recent)
+            lines.append(f"Recent emotional trend: {trend}")
+        return "\n".join(lines)
 
     def _tokenize(self, text: str) -> set[str]:
         words = re.findall(r"[a-zA-Z]+", text.lower())

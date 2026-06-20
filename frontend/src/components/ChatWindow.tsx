@@ -3,6 +3,14 @@ import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
 import { SystemMessageEditor } from "./SystemMessageEditor";
 
+const EMOTION_COLORS: Record<string, string> = {
+  calm: "#30d158",
+  happy: "#ffd60a",
+  sad: "#5e5ce6",
+  angry: "#ff453a",
+  anxious: "#ff9f0a",
+};
+
 interface Props {
   chat: Chat;
   agent: Agent | null;
@@ -11,13 +19,14 @@ interface Props {
   loading: boolean;
   error: string | null;
   isMobile: boolean;
+  currentEmotion: { emotion: string; intensity: number } | null;
   onBack: () => void;
   onSend: (content: string) => void;
   onUpdateChat: (id: string, data: Partial<Chat>) => void;
   onReset: (id: string) => void;
 }
 
-export function ChatWindow({ chat, agent, messages, streamingContent, loading, error, isMobile, onBack, onSend, onUpdateChat, onReset }: Props) {
+export function ChatWindow({ chat, agent, messages, streamingContent, loading, error, isMobile, currentEmotion, onBack, onSend, onUpdateChat, onReset }: Props) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", background: "#000", minWidth: 0 }}>
       <div style={{
@@ -34,11 +43,21 @@ export function ChatWindow({ chat, agent, messages, streamingContent, loading, e
           </button>
         )}
         {agent && (
-          <div style={{
-            width: 28, height: 28, borderRadius: 14, display: "flex", alignItems: "center",
-            justifyContent: "center", fontSize: 14, background: "#1c1c1e", flexShrink: 0,
-          }}>
-            {agent.avatar}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 14, display: "flex", alignItems: "center",
+              justifyContent: "center", fontSize: 14, background: "#1c1c1e",
+            }}>
+              {agent.avatar}
+            </div>
+            {currentEmotion && (
+              <div style={{
+                width: 8, height: 8, borderRadius: 4,
+                background: EMOTION_COLORS[currentEmotion.emotion] || "#555",
+                position: "absolute", bottom: -1, right: -1,
+                border: "1.5px solid #000",
+              }} />
+            )}
           </div>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>

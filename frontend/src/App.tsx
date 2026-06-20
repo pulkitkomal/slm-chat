@@ -7,6 +7,7 @@ import { useIsMobile } from "./hooks/useMediaQuery";
 export default function App() {
   const {
     agents, chats, activeChatId, activeChat, activeAgent, messages, streamingContent, loading, error,
+    currentEmotion,
     selectChat, createChat, updateChat, deleteChat, createAgent, deleteAgent, resetChat, sendMessage,
   } = useChat();
 
@@ -76,6 +77,7 @@ export default function App() {
           loading={loading}
           error={error}
           isMobile={isMobile}
+          currentEmotion={currentEmotion}
           onBack={handleBack}
           onSend={sendMessage}
           onUpdateChat={updateChat}

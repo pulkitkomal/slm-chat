@@ -149,4 +149,30 @@ class LLMClient:
         return clean
 
 
+    async def classify_emotion(self, user_message: str) -> tuple[str, float]:
+        prompt = (
+            "Classify the emotional state from this message.\n"
+            "Emotions: calm, happy, sad, angry, anxious\n"
+            "Reply: emotion | intensity (0.0-1.0)\n"
+            f"Message: {user_message}"
+        )
+        result = await self._ollama_chat([
+            {"role": "system", "content": "Classify the emotion. Reply with: emotion | intensity"},
+            {"role": "user", "content": prompt},
+        ], stream=False)
+        text = result.get("message", {}).get("content", "").strip()
+        parts = [p.strip() for p in text.split("|")]
+        emotion = parts[0].lower() if parts else "calm"
+        VALID = {"calm", "happy", "sad", "angry", "anxious"}
+        if emotion not in VALID:
+            emotion = "calm"
+        intensity = 0.5
+        if len(parts) > 1:
+            try:
+                intensity = max(0.0, min(1.0, float(parts[1])))
+            except ValueError:
+                pass
+        return emotion, intensity
+
+
 llm_client = LLMClient()

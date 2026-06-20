@@ -61,4 +61,5 @@ export const api = {
     request<Message>(`/api/chats/${chatId}/messages`, { method: "POST", body: JSON.stringify({ content }) }),
   streamUrl: (chatId: string) => `${API_BASE}/api/chats/${chatId}/stream`,
   getGraph: (chatId: string) => request<GraphData>(`/api/chats/${chatId}/graph`),
+  getEmotion: (chatId: string) => request<{ emotion: string; intensity: number; timestamp?: string }>(`/api/chats/${chatId}/emotion`),
 };

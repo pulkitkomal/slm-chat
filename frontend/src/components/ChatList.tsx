@@ -20,14 +20,14 @@ export function ChatList({ agents, chats, activeChatId, onSelect, onCreate, onDe
   return (
     <div style={{
       width: isMobile ? "100%" : 320,
-      height: "100vh",
+      height: "100dvh",
       display: "flex",
       flexDirection: "column",
       background: "#000",
       borderRight: "1px solid #1c1c1e",
     }}>
       <div style={{
-        padding: isMobile ? "52px 16px 8px" : "16px 16px 8px",
+        padding: isMobile ? "calc(16px + var(--sat)) 16px 8px" : "16px 16px 8px",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
@@ -38,8 +38,9 @@ export function ChatList({ agents, chats, activeChatId, onSelect, onCreate, onDe
         <button
           onClick={() => setShowCreator(true)}
           style={{
-            width: 28, height: 28, borderRadius: 14, border: "none", background: "#0a84ff",
-            color: "#fff", fontSize: 16, cursor: "pointer", display: "flex",
+            width: isMobile ? 36 : 28, height: isMobile ? 36 : 28,
+            borderRadius: "50%", border: "none", background: "#0a84ff",
+            color: "#fff", fontSize: isMobile ? 20 : 16, cursor: "pointer", display: "flex",
             alignItems: "center", justifyContent: "center", fontWeight: 600,
           }}
         >

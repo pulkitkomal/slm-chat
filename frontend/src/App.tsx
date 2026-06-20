@@ -41,12 +41,13 @@ export default function App() {
 
   return (
     <div style={{
-      display: "flex", height: "100vh", background: "#000", color: "#fff",
+      display: "flex", height: "100dvh", background: "#000", color: "#fff",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif",
     }}>
       <style>{`
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body, #root { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #3a3a3c; border-radius: 2px; }
@@ -54,6 +55,8 @@ export default function App() {
         .history-row:hover .delete-btn { opacity: 0.5 !important; }
         .agent-row:hover { background: #111 !important; }
         .history-row:hover { background: #111 !important; }
+        .agent-row { min-height: 48px; }
+        .history-row { min-height: 40px; }
       `}</style>
       {(!isMobile || showList) && (
         <ChatList

@@ -28,16 +28,17 @@ interface Props {
 
 export function ChatWindow({ chat, agent, messages, streamingContent, loading, error, isMobile, currentEmotion, onBack, onSend, onUpdateChat, onReset }: Props) {
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", background: "#000", minWidth: 0 }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100dvh", background: "#000", minWidth: 0 }}>
       <div style={{
-        padding: isMobile ? "52px 12px 8px" : "12px 12px 8px",
+        padding: isMobile ? "calc(12px + var(--sat)) 12px 8px" : "12px 12px 8px",
         display: "flex", alignItems: "center", gap: 8,
         borderBottom: "1px solid #1c1c1e",
       }}>
         {isMobile && (
           <button onClick={onBack} style={{
-            background: "none", border: "none", color: "#0a84ff", fontSize: 24,
-            cursor: "pointer", padding: "0 4px", lineHeight: 1,
+            background: "none", border: "none", color: "#0a84ff", fontSize: 28,
+            cursor: "pointer", width: 40, height: 40, display: "flex",
+            alignItems: "center", justifyContent: "center", lineHeight: 1,
           }}>
             ‹
           </button>

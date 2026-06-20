@@ -5,7 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Chat</title>
-    <style>body { margin: 0; background: #000; }</style>
+    <style>
+      :root { --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); }
+      body { margin: 0; background: #000; }
+      input, textarea, button { font-size: 16px; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

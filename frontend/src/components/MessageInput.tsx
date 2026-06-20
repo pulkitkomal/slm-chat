@@ -20,7 +20,7 @@ export function MessageInput({ onSend, disabled, isMobile }: Props) {
 
   return (
     <form onSubmit={handleSubmit} style={{
-      padding: isMobile ? "6px 12px 28px" : "6px 12px 12px",
+      padding: isMobile ? "6px 12px calc(12px + var(--sab))" : "6px 12px 12px",
       display: "flex", gap: 6, alignItems: "flex-end",
     }}>
       <div style={{
